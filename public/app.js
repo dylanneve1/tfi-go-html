@@ -44,6 +44,9 @@
     appTitle: $('appTitle'),
     themeToggle: $('themeToggle'),
     themeIcon: $('themeIcon'),
+    nearbySection: $('nearbySection'),
+    nearbyList: $('nearbyList'),
+    nearbyLoading: $('nearbyLoading'),
     favouritesSection: $('favouritesSection'),
     favouritesList: $('favouritesList'),
     favouritesEmpty: $('favouritesEmpty'),
@@ -1126,40 +1129,69 @@
 
   async function loadTripDetails(dep) {
     const vehicle = dep.vehicle;
-    if (!vehicle || !vehicle.dataFrameRef || !vehicle.datedVehicleJourneyRef) {
-      el.tripLoading.classList.add('hidden');
-      el.tripEmpty.classList.remove('hidden');
-      return;
-    }
+    const hasRealtime = vehicle && vehicle.dataFrameRef && vehicle.datedVehicleJourneyRef;
 
-    try {
-      const res = await fetch(API('/api/estimatedTimetable'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dataFrameRef: vehicle.dataFrameRef,
-          datedVehicleJourneyRef: vehicle.datedVehicleJourneyRef,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+    if (hasRealtime) {
+      // Try real-time estimated timetable first
+      try {
+        const res = await fetch(API('/api/estimatedTimetable'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dataFrameRef: vehicle.dataFrameRef,
+            datedVehicleJourneyRef: vehicle.datedVehicleJourneyRef,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
 
-      el.tripLoading.classList.add('hidden');
-
-      if (!data.rows || data.rows.length === 0) {
-        el.tripEmpty.classList.remove('hidden');
-        return;
+        if (data.rows && data.rows.length > 0) {
+          el.tripLoading.classList.add('hidden');
+          renderTripStops(data);
+          startTripTracking(dep, data);
+          return;
+        }
+      } catch (e) {
+        console.error('Estimated timetable error:', e);
       }
-
-      renderTripStops(data);
-      // Start live vehicle tracking if we have a service reference
-      startTripTracking(dep, data);
-    } catch (e) {
-      el.tripLoading.classList.add('hidden');
-      el.tripEmpty.classList.remove('hidden');
-      showSnackbar('Failed to load trip details');
-      console.error('Trip details error:', e);
     }
+
+    // Fallback: try scheduled timetable
+    const serviceRef = dep.serviceReference || dep.vehicle?.lineRef;
+    if (serviceRef) {
+      try {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:00.000+00:00`;
+
+        const res = await fetch(API('/api/timetable'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientTimeZoneOffsetInMS: 0,
+            timetableDirection: dep.direction || 'OUTBOUND',
+            timetableId: serviceRef,
+            maxColumnsToFetch: 3,
+            dateAndTime: dateStr,
+            includeNonTimingPoints: true,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (data.rows && data.rows.length > 0) {
+          el.tripLoading.classList.add('hidden');
+          renderTripStops(data, true); // true = scheduled only
+          startTripTracking(dep, data);
+          return;
+        }
+      } catch (e) {
+        console.error('Scheduled timetable error:', e);
+      }
+    }
+
+    el.tripLoading.classList.add('hidden');
+    el.tripEmpty.classList.remove('hidden');
   }
 
   // ===== Trip Live Map =====
@@ -1282,7 +1314,7 @@
     }
   }
 
-  function renderTripStops(data) {
+  function renderTripStops(data, scheduledOnly) {
     el.tripStopsList.innerHTML = '';
     const rows = data.rows || [];
     const column = (data.columns && data.columns[0]) || {};
@@ -1406,10 +1438,79 @@
     sheetDragStart = null;
   });
 
+  // ===== Nearby Stops =====
+  function loadNearbyStops() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        state.userLocation = [lat, lon];
+
+        // Show section and loading
+        el.nearbySection.classList.remove('hidden');
+        el.nearbyLoading.classList.remove('hidden');
+        el.nearbyList.innerHTML = '';
+
+        // Use native TFI API with small bounding box (~500m radius)
+        const delta = 0.005; // ~500m
+        try {
+          const res = await fetch(API(`/api/stops?south=${lat-delta}&west=${lon-delta}&north=${lat+delta}&east=${lon+delta}`));
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const stops = await res.json();
+
+          el.nearbyLoading.classList.add('hidden');
+
+          if (stops.length === 0) {
+            el.nearbySection.classList.add('hidden');
+            return;
+          }
+
+          // Sort by distance
+          const withDist = stops.map(s => ({
+            ...s,
+            dist: haversine(lat, lon, s.lat, s.lon),
+          })).sort((a, b) => a.dist - b.dist).slice(0, 8);
+
+          withDist.forEach(stop => {
+            const card = createStopCard(stop);
+            // Add distance badge
+            const distText = stop.dist < 1000
+              ? `${Math.round(stop.dist)}m`
+              : `${(stop.dist / 1000).toFixed(1)}km`;
+            const meta = card.querySelector('.stop-meta');
+            if (meta) meta.textContent += ` · ${distText}`;
+            el.nearbyList.appendChild(card);
+          });
+        } catch (e) {
+          el.nearbyLoading.classList.add('hidden');
+          console.error('Nearby stops error:', e);
+        }
+      },
+      () => {
+        // Geolocation denied/unavailable — hide section
+        el.nearbySection.classList.add('hidden');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  // Haversine distance in meters
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
   // ===== Init =====
   initTheme();
   renderFavourites();
   showBottomNav();
+  loadNearbyStops();
 
   if (window.innerWidth > 600) {
     setTimeout(() => el.searchInput.focus(), 300);

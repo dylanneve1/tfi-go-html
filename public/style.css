@@ -1275,6 +1275,83 @@ body.has-bottom-nav .snackbar {
   color: var(--md-error);
 }
 
+/* ===== Facilities Row ===== */
+.facilities-row {
+  display: flex;
+  gap: 6px;
+  padding: 0 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-wrap: wrap;
+}
+
+.facilities-row::-webkit-scrollbar {
+  display: none;
+}
+
+.facility-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.facility-chip .material-symbols-rounded {
+  font-size: 16px;
+  color: var(--md-primary);
+}
+
+/* ===== Trip Map ===== */
+.trip-map-container {
+  margin-bottom: 12px;
+}
+
+.trip-map {
+  width: 100%;
+  height: 200px;
+  border-radius: var(--md-shape-lg);
+  overflow: hidden;
+  display: none;
+  margin-bottom: 8px;
+  background: var(--md-surface-container);
+}
+
+[data-theme="dark"] .trip-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+}
+
+.trip-map-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xl);
+  background: none;
+  color: var(--md-primary);
+  font-family: 'Google Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trip-map-toggle:hover {
+  background: var(--md-surface-container);
+}
+
+.trip-map-toggle .material-symbols-rounded {
+  font-size: 18px;
+}
+
 /* ===== Alerts Banner ===== */
 .alerts-banner {
   display: flex;

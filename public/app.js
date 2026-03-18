@@ -66,6 +66,12 @@
     alertsBanner: $('alertsBanner'),
     alertsText: $('alertsText'),
     alertsDismiss: $('alertsDismiss'),
+    facilitiesBanner: $('facilitiesBanner'),
+    // Trip map
+    tripMapContainer: $('tripMapContainer'),
+    tripMap: $('tripMap'),
+    tripMapToggle: $('tripMapToggle'),
+    tripMapToggleLabel: $('tripMapToggleLabel'),
     // Map elements
     mapView: $('mapView'),
     mapSearchInput: $('mapSearchInput'),
@@ -314,11 +320,13 @@
     el.departuresEmpty.classList.add('hidden');
     el.filterChips.innerHTML = '';
 
-    // Hide alerts banner
+    // Hide banners
     if (el.alertsBanner) el.alertsBanner.classList.add('hidden');
+    if (el.facilitiesBanner) el.facilitiesBanner.classList.add('hidden');
 
     loadDepartures();
     loadAlerts(stop);
+    loadFacilities(stop);
     startAutoRefresh();
   }
 
@@ -410,6 +418,58 @@
     el.alertsDismiss.addEventListener('click', () => {
       el.alertsBanner.classList.add('hidden');
     });
+  }
+
+  // ===== Stop Facilities =====
+  const facilityIcons = {
+    'SHELTER': { icon: 'night_shelter', label: 'Shelter' },
+    'TOILETS': { icon: 'wc', label: 'Toilets' },
+    'TICKET_OFFICE': { icon: 'confirmation_number', label: 'Tickets' },
+    'CAR_PARK': { icon: 'local_parking', label: 'Parking' },
+    'WHEELCHAIR_ACCESS': { icon: 'accessible', label: 'Accessible' },
+    'BIKE_PARK': { icon: 'pedal_bike', label: 'Bike Park' },
+    'WAITING_ROOM': { icon: 'weekend', label: 'Waiting Room' },
+    'WIFI': { icon: 'wifi', label: 'WiFi' },
+    'ATM': { icon: 'atm', label: 'ATM' },
+    'SHOP': { icon: 'shopping_bag', label: 'Shop' },
+    'CAFE': { icon: 'coffee', label: 'Café' },
+    'LIFT': { icon: 'elevator', label: 'Lift' },
+    'TAXI_RANK': { icon: 'local_taxi', label: 'Taxi' },
+  };
+
+  async function loadFacilities(stop) {
+    if (!el.facilitiesBanner) return;
+    try {
+      const res = await fetch(API('/api/stopsAssets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idList: [stop.id] }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const assets = [];
+      (Array.isArray(data) ? data : []).forEach(item => {
+        (item.assets || []).forEach(asset => {
+          const type = asset.assetType?.toUpperCase() || '';
+          if (facilityIcons[type]) {
+            assets.push(facilityIcons[type]);
+          }
+        });
+      });
+
+      if (assets.length > 0) {
+        el.facilitiesBanner.innerHTML = assets.map(a =>
+          `<div class="facility-chip">
+            <span class="material-symbols-rounded">${a.icon}</span>
+            <span>${a.label}</span>
+          </div>`
+        ).join('');
+        el.facilitiesBanner.classList.remove('hidden');
+      }
+    } catch (e) {
+      // Silently ignore
+    }
   }
 
   // ===== Load Departures =====
@@ -1020,6 +1080,7 @@
 
   function showTrip(dep) {
     state.tripDeparture = dep;
+    stopVehicleTracking();
 
     el.departuresView.classList.remove('active');
     el.searchView.classList.remove('active');
@@ -1040,6 +1101,17 @@
     el.tripStopsList.innerHTML = '';
     el.tripLoading.classList.remove('hidden');
     el.tripEmpty.classList.add('hidden');
+
+    // Reset trip map
+    if (el.tripMapContainer) {
+      el.tripMapContainer.classList.add('hidden');
+      state.tripMapExpanded = false;
+      if (el.tripMapToggleLabel) el.tripMapToggleLabel.textContent = 'Show live map';
+    }
+    if (state.tripMap) {
+      state.tripMap.remove();
+      state.tripMap = null;
+    }
 
     loadTripDetails(dep);
   }
@@ -1072,11 +1144,133 @@
       }
 
       renderTripStops(data);
+      // Start live vehicle tracking if we have a service reference
+      startTripTracking(dep, data);
     } catch (e) {
       el.tripLoading.classList.add('hidden');
       el.tripEmpty.classList.remove('hidden');
       showSnackbar('Failed to load trip details');
       console.error('Trip details error:', e);
+    }
+  }
+
+  // ===== Trip Live Map =====
+  function startTripTracking(dep, timetableData) {
+    const serviceRef = dep.vehicle?.lineRef || dep.serviceReference;
+    if (!serviceRef) return;
+
+    // Show the map toggle button
+    if (el.tripMapContainer) {
+      el.tripMapContainer.classList.remove('hidden');
+    }
+
+    // Store trip data for map rendering
+    state.tripTimetableData = timetableData;
+    state.tripServiceRef = serviceRef;
+
+    // Set up toggle
+    if (el.tripMapToggle && !el.tripMapToggle._bound) {
+      el.tripMapToggle._bound = true;
+      el.tripMapToggle.addEventListener('click', () => {
+        state.tripMapExpanded = !state.tripMapExpanded;
+        const mapEl = el.tripMap;
+        if (state.tripMapExpanded) {
+          mapEl.style.display = 'block';
+          el.tripMapToggleLabel.textContent = 'Hide live map';
+          setTimeout(() => initTripMap(), 50);
+        } else {
+          mapEl.style.display = 'none';
+          el.tripMapToggleLabel.textContent = 'Show live map';
+          stopVehicleTracking();
+        }
+      });
+    }
+  }
+
+  function initTripMap() {
+    if (state.tripMap) {
+      state.tripMap.invalidateSize();
+      updateTripMapVehicles();
+      return;
+    }
+
+    state.tripMap = L.map('tripMap', {
+      zoomControl: false,
+      attributionControl: false,
+    }).setView([53.3498, -6.2603], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(state.tripMap);
+
+    // Plot route stops on mini-map
+    const data = state.tripTimetableData;
+    if (data?.rows) {
+      const coords = [];
+      data.rows.forEach(row => {
+        if (row.coordinate) {
+          const lat = row.coordinate.latitude;
+          const lon = row.coordinate.longitude;
+          coords.push([lat, lon]);
+          // Small circle marker for each stop
+          L.circleMarker([lat, lon], {
+            radius: 5,
+            fillColor: '#00B74F',
+            color: '#fff',
+            weight: 2,
+            fillOpacity: 0.9,
+          }).addTo(state.tripMap);
+        }
+      });
+
+      // Draw route polyline
+      if (coords.length > 1) {
+        L.polyline(coords, {
+          color: '#00B74F',
+          weight: 3,
+          opacity: 0.6,
+          dashArray: '8, 8',
+        }).addTo(state.tripMap);
+        state.tripMap.fitBounds(coords, { padding: [30, 30] });
+      }
+    }
+
+    // Load vehicles immediately and start interval
+    updateTripMapVehicles();
+    state.vehicleInterval = setInterval(() => updateTripMapVehicles(), 10000);
+  }
+
+  async function updateTripMapVehicles() {
+    if (!state.tripMap || !state.tripServiceRef) return;
+    try {
+      const res = await fetch(API('/api/vehicleLocation'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceReference: state.tripServiceRef, direction: 'OUTBOUND' }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      // Clear old vehicle markers on trip map
+      clearVehicleMarkers();
+
+      const vehicles = data.vehicleLocations || [];
+      vehicles.forEach(v => {
+        if (!v.coordinate) return;
+        const icon = L.divIcon({
+          className: 'vehicle-marker-container',
+          html: `<div class="vehicle-marker">
+            <span class="material-symbols-rounded">directions_bus</span>
+          </div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+        const marker = L.marker([v.coordinate.latitude, v.coordinate.longitude], { icon })
+          .addTo(state.tripMap);
+        state.vehicleMarkers.push(marker);
+      });
+    } catch (e) {
+      console.error('Trip vehicle update error:', e);
     }
   }
 

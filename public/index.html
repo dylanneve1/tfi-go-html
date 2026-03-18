@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#00B74F" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1c1e" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>TFI Go</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="style.css?v=9">
+</head>
+<body>
+  <!-- Snackbar -->
+  <div id="snackbar" class="snackbar" aria-live="polite"></div>
+
+  <!-- App Bar -->
+  <header class="app-bar" id="appBar">
+    <button class="icon-btn back-btn hidden" id="backBtn" aria-label="Back">
+      <span class="material-symbols-rounded">arrow_back</span>
+    </button>
+    <h1 class="app-title" id="appTitle">TFI Go</h1>
+    <div class="app-bar-actions">
+      <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">
+        <span class="material-symbols-rounded" id="themeIcon">dark_mode</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Search View -->
+  <main class="view active" id="searchView">
+    <div class="search-container">
+      <div class="search-bar">
+        <span class="material-symbols-rounded search-icon">search</span>
+        <input type="text" id="searchInput" placeholder="Search stops and stations..." autocomplete="off" spellcheck="false">
+        <button class="icon-btn clear-btn hidden" id="clearBtn" aria-label="Clear">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Favourites -->
+    <section id="favouritesSection" class="section">
+      <h2 class="section-title">
+        <span class="material-symbols-rounded">star</span>
+        Favourites
+      </h2>
+      <div id="favouritesList" class="stops-list"></div>
+      <div id="favouritesEmpty" class="empty-state">
+        <span class="material-symbols-rounded empty-icon">star_border</span>
+        <p>No favourites yet</p>
+        <p class="empty-hint">Search for a stop and tap the star to save it</p>
+      </div>
+    </section>
+
+    <!-- Search Results -->
+    <section id="resultsSection" class="section hidden">
+      <h2 class="section-title">
+        <span class="material-symbols-rounded">place</span>
+        Results
+      </h2>
+      <div id="resultsList" class="stops-list"></div>
+      <div id="resultsEmpty" class="empty-state hidden">
+        <span class="material-symbols-rounded empty-icon">search_off</span>
+        <p>No stops found</p>
+        <p class="empty-hint">Try a different search term</p>
+      </div>
+      <div id="resultsLoading" class="loading-container hidden">
+        <div class="skeleton-list">
+          <div class="skeleton-item"><div class="skeleton-icon"></div><div class="skeleton-text"><div class="skeleton-line w70"></div><div class="skeleton-line w40"></div></div></div>
+          <div class="skeleton-item"><div class="skeleton-icon"></div><div class="skeleton-text"><div class="skeleton-line w60"></div><div class="skeleton-line w30"></div></div></div>
+          <div class="skeleton-item"><div class="skeleton-icon"></div><div class="skeleton-text"><div class="skeleton-line w80"></div><div class="skeleton-line w50"></div></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Map View -->
+  <main class="view" id="mapView">
+    <div class="map-search-container">
+      <div class="search-bar map-search-bar">
+        <span class="material-symbols-rounded search-icon">search</span>
+        <input type="text" id="mapSearchInput" placeholder="Search stops and stations..." autocomplete="off" spellcheck="false">
+        <button class="icon-btn clear-btn hidden" id="mapClearBtn" aria-label="Clear">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+    </div>
+    <div id="map"></div>
+    <!-- Bottom sheet for map results -->
+    <div class="map-bottom-sheet" id="mapBottomSheet">
+      <div class="bottom-sheet-handle" id="bottomSheetHandle"><div class="handle-bar"></div></div>
+      <div class="bottom-sheet-content" id="bottomSheetContent">
+        <div id="mapResultsList" class="stops-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Departures View -->
+  <main class="view" id="departuresView">
+    <div class="departures-header">
+      <div class="stop-info">
+        <span class="material-symbols-rounded stop-type-icon" id="depStopIcon">directions_bus</span>
+        <div>
+          <h2 id="depStopName" class="stop-name-title"></h2>
+          <p id="depStopId" class="stop-id-subtitle"></p>
+        </div>
+      </div>
+      <div class="dep-actions">
+        <button class="icon-btn" id="favToggle" aria-label="Toggle favourite">
+          <span class="material-symbols-rounded" id="favIcon">star_border</span>
+        </button>
+        <button class="icon-btn" id="refreshBtn" aria-label="Refresh">
+          <span class="material-symbols-rounded">refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Alerts banner -->
+    <div id="alertsBanner" class="alerts-banner hidden">
+      <span class="material-symbols-rounded alerts-icon">warning</span>
+      <span id="alertsText" class="alerts-text"></span>
+      <button class="icon-btn alerts-dismiss" id="alertsDismiss" aria-label="Dismiss">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </div>
+
+    <!-- Filter chips -->
+    <div class="chips-container" id="filterChips"></div>
+
+    <!-- Auto-refresh indicator -->
+    <div class="refresh-indicator" id="refreshIndicator">
+      <div class="refresh-bar" id="refreshBar"></div>
+    </div>
+
+    <!-- Departures list -->
+    <div id="departuresList" class="departures-list"></div>
+    <div id="departuresEmpty" class="empty-state hidden">
+      <span class="material-symbols-rounded empty-icon">schedule</span>
+      <p>No departures found</p>
+      <p class="empty-hint">There may be no services running at this time</p>
+    </div>
+    <div id="departuresLoading" class="loading-container hidden">
+      <div class="skeleton-list">
+        <div class="skeleton-dep"><div class="skeleton-badge"></div><div class="skeleton-text"><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div><div class="skeleton-time"></div></div>
+        <div class="skeleton-dep"><div class="skeleton-badge"></div><div class="skeleton-text"><div class="skeleton-line w70"></div><div class="skeleton-line w30"></div></div><div class="skeleton-time"></div></div>
+        <div class="skeleton-dep"><div class="skeleton-badge"></div><div class="skeleton-text"><div class="skeleton-line w50"></div><div class="skeleton-line w40"></div></div><div class="skeleton-time"></div></div>
+        <div class="skeleton-dep"><div class="skeleton-badge"></div><div class="skeleton-text"><div class="skeleton-line w60"></div><div class="skeleton-line w50"></div></div><div class="skeleton-time"></div></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Trip Details View -->
+  <main class="view" id="tripView">
+    <div class="trip-header">
+      <div class="trip-route-info">
+        <div class="route-badge trip-route-badge" id="tripRouteBadge">?</div>
+        <div>
+          <h2 class="trip-destination" id="tripDestination"></h2>
+          <p class="trip-service" id="tripService"></p>
+        </div>
+      </div>
+    </div>
+    <div id="tripLoading" class="loading-container">
+      <div class="skeleton-list">
+        <div class="skeleton-dep"><div class="skeleton-badge"></div><div class="skeleton-text"><div class="skeleton-line w60"></div></div></div>
+        <div class="skeleton-dep"><div class="skeleton-badge"></div><div class="skeleton-text"><div class="skeleton-line w70"></div></div></div>
+        <div class="skeleton-dep"><div class="skeleton-badge"></div><div class="skeleton-text"><div class="skeleton-line w50"></div></div></div>
+      </div>
+    </div>
+    <div id="tripStopsList" class="trip-timeline"></div>
+    <div id="tripEmpty" class="empty-state hidden">
+      <span class="material-symbols-rounded empty-icon">route</span>
+      <p>Trip details unavailable</p>
+      <p class="empty-hint">Real-time trip data isn't available for this service</p>
+    </div>
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="bottom-nav-item active" id="navSearch" aria-label="Search">
+      <div class="nav-indicator"></div>
+      <span class="material-symbols-rounded">search</span>
+      <span class="nav-label">Search</span>
+    </button>
+    <button class="bottom-nav-item" id="navMap" aria-label="Map">
+      <div class="nav-indicator"></div>
+      <span class="material-symbols-rounded">map</span>
+      <span class="nav-label">Map</span>
+    </button>
+  </nav>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="app.js?v=9"></script>
+</body>
+</html>

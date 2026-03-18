@@ -1,0 +1,19 @@
+The Caddy route for /tfi has been loaded into the running Caddy instance via the
+admin API. However, /etc/caddy/Caddyfile could not be updated (requires sudo).
+
+If Caddy restarts, the /tfi route will be lost. To persist it, add this block
+to /etc/caddy/Caddyfile inside the claudiusthebot.duckdns.org block, before the
+"Root -> Agent Hub" section:
+
+	# TFI Go - Irish public transport
+	handle /tfi/* {
+		uri strip_prefix /tfi
+		reverse_proxy localhost:3847
+	}
+	handle /tfi {
+		redir /tfi/ permanent
+	}
+
+Then reload: sudo systemctl reload caddy
+
+The updated Caddyfile is also saved at /tmp/Caddyfile.new

@@ -1,0 +1,12 @@
+{
+  "name": "tfi-go-web",
+  "version": "1.0.0",
+  "description": "TFI Go - Irish Public Transport Departures",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

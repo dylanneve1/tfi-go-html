@@ -1452,15 +1452,17 @@
 
   // ===== Nearby Stops =====
   function loadNearbyStops() {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      el.nearbySection.classList.add('hidden');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
         state.userLocation = [lat, lon];
 
-        // Show section and loading
-        el.nearbySection.classList.remove('hidden');
+        // Show loading skeletons
         el.nearbyLoading.classList.remove('hidden');
         el.nearbyList.innerHTML = '';
 

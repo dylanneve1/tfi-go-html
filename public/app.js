@@ -1493,11 +1493,6 @@
             const meta = card.querySelector('.stop-meta');
             if (meta) meta.textContent += ` · ${distText}`;
             el.nearbyList.appendChild(card);
-
-            // Load quick departure preview for nearest 4 stops
-            if (stop.dist < 600) {
-              loadQuickDepartures(stop, card);
-            }
           });
         } catch (e) {
           el.nearbyLoading.classList.add('hidden');

@@ -1275,6 +1275,82 @@ body.has-bottom-nav .snackbar {
   color: var(--md-error);
 }
 
+/* ===== Quick Departures Preview ===== */
+.quick-departures {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.quick-dep-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.quick-dep-route {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 20px;
+  border-radius: 4px;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.quick-dep-dest {
+  flex: 1;
+  min-width: 0;
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-dep-time {
+  font-family: 'Google Sans', sans-serif;
+  font-weight: 600;
+  color: var(--md-primary);
+  flex-shrink: 0;
+}
+
+/* ===== Locate Me Button ===== */
+.locate-me-btn {
+  position: absolute;
+  bottom: 88px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  box-shadow: var(--md-shadow-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.locate-me-btn:active {
+  background: var(--md-surface-container-highest);
+}
+
+.locate-me-btn .material-symbols-rounded {
+  font-size: 22px;
+  color: var(--md-primary);
+}
+
 /* ===== Facilities Row ===== */
 .facilities-row {
   display: flex;

@@ -779,6 +779,18 @@
       areaLoadTimeout = setTimeout(() => loadAreaStops(), 500);
     });
 
+    // Locate me button
+    const locateBtn = document.getElementById('locateMeBtn');
+    if (locateBtn) {
+      locateBtn.addEventListener('click', () => {
+        if (state.userLocation) {
+          state.map.setView(state.userLocation, 16, { animate: true });
+        } else {
+          requestUserLocation();
+        }
+      });
+    }
+
     requestUserLocation();
     setTimeout(() => loadAreaStops(), 300);
   }
@@ -1481,6 +1493,11 @@
             const meta = card.querySelector('.stop-meta');
             if (meta) meta.textContent += ` · ${distText}`;
             el.nearbyList.appendChild(card);
+
+            // Load quick departure preview for nearest 4 stops
+            if (stop.dist < 600) {
+              loadQuickDepartures(stop, card);
+            }
           });
         } catch (e) {
           el.nearbyLoading.classList.add('hidden');
@@ -1493,6 +1510,63 @@
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  }
+
+  // Quick departure preview on nearby stop cards
+  async function loadQuickDepartures(stop, card) {
+    try {
+      const now = new Date();
+      const tzOffsetMin = now.getTimezoneOffset();
+      const sign = tzOffsetMin <= 0 ? '+' : '-';
+      const absMin = Math.abs(tzOffsetMin);
+      const tzHH = String(Math.floor(absMin / 60)).padStart(2, '0');
+      const tzMM = String(absMin % 60).padStart(2, '0');
+      const tzStr = `${sign}${tzHH}:${tzMM}`;
+      const pad = (n) => String(n).padStart(2, '0');
+      const iso = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.000${tzStr}`;
+
+      const res = await fetch(API('/api/departures'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientTimeZoneOffsetInMS: -tzOffsetMin * 60 * 1000,
+          departureDate: iso, departureTime: iso, requestTime: iso,
+          stopIds: [stop.id], stopType: stop.type, stopName: stop.name,
+          departureOrArrival: 'DEPARTURE', refresh: false,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      let deps = (data.stopDepartures || []).filter(d => !d.cancelled);
+      // Take next 3 departures
+      deps = deps.slice(0, 3);
+      if (deps.length === 0) return;
+
+      const preview = document.createElement('div');
+      preview.className = 'quick-departures';
+      deps.forEach(dep => {
+        const route = dep.serviceNumber || '?';
+        const dest = dep.destination || '';
+        const timeStr = dep.realTimeDeparture || dep.scheduledDeparture || '';
+        let display = '';
+        if (timeStr) {
+          const dt = new Date(timeStr);
+          const diffMins = Math.round((dt - new Date()) / 60000);
+          display = diffMins <= 0 ? 'Due' : diffMins <= 60 ? `${diffMins}m` : dt.toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+        const chip = document.createElement('div');
+        chip.className = 'quick-dep-chip';
+        chip.innerHTML = `<span class="quick-dep-route" style="background:${routeColor(route)}">${esc(route)}</span><span class="quick-dep-dest">${esc(dest)}</span><span class="quick-dep-time">${display}</span>`;
+        preview.appendChild(chip);
+      });
+
+      // Insert before the chevron
+      const chevron = card.querySelector('.chevron');
+      card.querySelector('.stop-details').appendChild(preview);
+    } catch (e) {
+      // Silently ignore
+    }
   }
 
   // Haversine distance in meters

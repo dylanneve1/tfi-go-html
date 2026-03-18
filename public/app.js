@@ -482,10 +482,18 @@
     el.refreshBtn.classList.add('refreshing');
 
     const now = new Date();
-    const iso = now.toISOString().replace('Z', '+00:00');
+    // Build local ISO string with correct timezone offset for TFI API
+    const tzOffsetMin = now.getTimezoneOffset(); // 0 for GMT, -60 for IST (UTC+1)
+    const sign = tzOffsetMin <= 0 ? '+' : '-';
+    const absMin = Math.abs(tzOffsetMin);
+    const tzHH = String(Math.floor(absMin / 60)).padStart(2, '0');
+    const tzMM = String(absMin % 60).padStart(2, '0');
+    const tzStr = `${sign}${tzHH}:${tzMM}`;
+    const pad = (n) => String(n).padStart(2, '0');
+    const iso = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.000${tzStr}`;
 
     const body = {
-      clientTimeZoneOffsetInMS: -3600000,
+      clientTimeZoneOffsetInMS: -tzOffsetMin * 60 * 1000,
       departureDate: iso,
       departureTime: iso,
       stopIds: [stop.id],

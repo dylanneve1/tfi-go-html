@@ -619,7 +619,7 @@
         if (diffMins <= 0) {
           timeDisplay = 'Due';
           timeClass = 'due';
-        } else if (diffMins <= 90) {
+        } else if (diffMins <= 60) {
           timeDisplay = `${diffMins}`;
           timeLabel = 'min';
         } else {
